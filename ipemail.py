@@ -1,8 +1,31 @@
 import yaml
 import netifaces
 import smtplib
+import zmq
+from discord import Embed
 
 
+def send_via_sock(msg):
+    ctx = zmq.Context()
+    for i in range(2):
+        sock = ctx.socket(zmq.REQ)
+        sock.setsockopt(zmq.RCVTIMEO, 500)
+        sock.connect("tcp://localhost:5555")
+        try:
+            sock.send_pyobj(msg)
+            break
+        except (zmq.error.ZMQError, zmq.error.Again) as e:
+            print(e)
+            print(f'try {i + 1} failed')
+            sock.close()
+    try:
+        print(sock.recv_pyobj())         
+    except (zmq.error.ZMQError, zmq.error.Again) as e:
+        print('receiving error')
+    finally:
+        sock.close()    
+        
+        
 def get_ips():
     msg = ''
     for i in netifaces.interfaces():
@@ -27,4 +50,14 @@ To: {em_cf['to']} \n""") + msg
 
 
 if __name__ == '__main__':
-    send_email('configs/email_config.yml', get_ips())
+    msg = get_ips()
+    try:
+        send_email('configs/email_config.yml', msg)
+    except Exception as e:
+        pass
+    embed = Embed(title='IP Addresses', description=msg)
+    msg_dic = {'embed': embed}    
+    send_via_sock(msg_dic)
+            
+    
+    
